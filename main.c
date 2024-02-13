@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <xc.h>
@@ -7,283 +6,189 @@
 #include "time.h"
 #include "lcd.h"
 
-
 #define _XTAL_FREQ  8000000
 
-#define LCD_EN PORTCbits.RC1
-#define LCD_RS PORTCbits.RC0
+// Definition of directions
+#define UP 0
+#define DOWN 1
+#define LEFT 2
+#define RIGHT 3
 
-// Définition des directions
-#define HAUT 0
-#define BAS 1
-#define GAUCHE 2
-#define DROITE 3
+#define MAX_SNAKE_LENGTH 100
 
-#define MAX_LONGUEUR_SERPENT 100
+// Initial position of the prey
+int x = 7;
+int y = 1;
 
-int x=7;
-int y=1;
-int score=0;
+int score = 0; // Initialize score
 
-int pseudo_aleatoire(int min, int max) {
+// Pseudo-random number generation to position the prey
+int pseudo_random(int min, int max) {
     return min + rand() / (RAND_MAX / (max - min + 1) + 1);
 }
 
-/*
-void delay() {
-    unsigned int i;
-    for (i = 0; i < 100; i++) {
-        // Vous pouvez ajuster ce délai selon votre besoin
-    }
-}
-
-void SendCommand(unsigned char command) {
-    LCD_RS = 0;
-    delay();
-    LCD_EN = 1;
-    delay();
-    PORTB = command;
-    delay();
-    LCD_EN = 0;
-    delay();
-}
-
-void SendData(unsigned char lcddata) {
-    LCD_RS = 1;
-    delay();
-    LCD_EN = 1;
-    delay();
-    PORTB = lcddata;
-    delay();
-    LCD_EN = 0;
-    delay();
-}
-
-void print(const char *str) {
-    while (*str != '\0') {
-        SendData(*str);
-        str++;
-    }
-}
-
-void SendString(const char *str) {
-    while (*str) {
-        SendData(*str++);
-    }
-}
-
-
-void ClearLCD() {
-    unsigned char P = 0x01; // Commande pour effacer l'affichage
-    SendCommand(P);
-}
-
-
-void SetCursor(unsigned char row, unsigned char col) {
-    unsigned char position;
-
-    // Calculer la position en fonction de la ligne et de la colonne
-    if (row == 0)
-        position = 0x80 + col;
-    else if (row == 1)
-        position = 0xC0 + col;
-    else if (row == 2)
-        position = 0x94 + col; // Adresse pour la troisième ligne
-    else if (row == 3)
-        position = 0xD4 + col; // Adresse pour la quatrième ligne
-    else
-        return; // Ligne non supportée
-
-    // Envoyer la commande pour définir la position du curseur
-    SendCommand(position);
-}*/
-
-
-
-
-// Structure du serpent
+// Snake structure
 typedef struct Snake {
-  int position_x;
-  int position_y;
-  int longueur;
-  int direction;
-  struct Segment *segments;
+    int position_x;
+    int position_y;
+    int length;
+    int direction;
+    struct Segment *segments;
 } Snake;
 
-// Structure du segment
+// Segment structure (snake body)
 typedef struct Segment {
-  int position_x;
-  int position_y;
+    int position_x;
+    int position_y;
 } Segment;
 
-// Fonction pour initialiser le serpent
-Snake serpent;
-Segment segments_serpent[MAX_LONGUEUR_SERPENT];
+Snake snake;
+Segment snake_segments[MAX_SNAKE_LENGTH];
 
-
-void initialiser_serpent(Snake *serpent) {
-  serpent->position_x = 0;
-  serpent->position_y = 3;
-  serpent->longueur = 1;
-  serpent->direction = DROITE;
-  serpent->segments = segments_serpent;
+// Initialize the snake
+void initialize_snake(Snake *snake) {
+    snake->position_x = 0; // Initial position of the snake's head
+    snake->position_y = 3;
+    snake->length = 1;
+    snake->direction = RIGHT;
+    snake->segments = snake_segments;
 }
 
-int nouvelle_position_x ;
-int nouvelle_position_y;
+// Variables to store new position of the snake
+int new_position_x;
+int new_position_y;
 
+// Move the snake
+void move_snake(Snake *snake) {
+    // Save the coordinates of the head before modifying them
+    int old_position_x = snake->position_x;
+    int old_position_y = snake->position_y;
 
+    // Determine the new position of the head
+    new_position_x = old_position_x;
+    new_position_y = old_position_y;
+    switch (snake->direction) {
+        case UP:
+            new_position_y--;
+            break;
+        case DOWN:
+            new_position_y++;
+            break;
+        case LEFT:
+            new_position_x--;
+            break;
+        case RIGHT:
+            new_position_x++;
+            break;
+    }
 
-void deplacer_serpent(Snake *serpent) {
-  // Sauvegarder les coordonnées de la tête avant de les modifier
-  int ancienne_position_x = serpent->position_x;
-  int ancienne_position_y = serpent->position_y;
+    // Update the position of the head
+    snake->position_x = new_position_x;
+    snake->position_y = new_position_y;
 
-  // Déterminer la nouvelle position de la tête
-  nouvelle_position_x = ancienne_position_x;
-  nouvelle_position_y = ancienne_position_y;
-  switch (serpent->direction) {
-    case HAUT:
-      nouvelle_position_y--;
-      break;
-    case BAS:
-      nouvelle_position_y++;
-      break;
-    case GAUCHE:
-      nouvelle_position_x--;
-      break;
-    case DROITE:
-      nouvelle_position_x++;
-      break;
-  }
+    // Move the segments of the snake
+    for (int i = snake->length - 1; i > 0; i--) {
+        snake_segments[i].position_x = snake_segments[i - 1].position_x;
+        snake_segments[i].position_y = snake_segments[i - 1].position_y;
+    }
 
-  // Mettre à jour la position de la tête
-  serpent->position_x = nouvelle_position_x;
-  serpent->position_y = nouvelle_position_y;
-
-  // Déplacer les segments du serpent
-  for (int i = serpent->longueur - 1; i > 0; i--) {
-    segments_serpent[i].position_x = segments_serpent[i - 1].position_x;
-    segments_serpent[i].position_y = segments_serpent[i - 1].position_y;
-  }
-
-  // Mettre à jour la position du segment initial avec les anciennes coordonnées de la tête
-  segments_serpent[0].position_x = ancienne_position_x;
-  segments_serpent[0].position_y = ancienne_position_y;
+    // Update the position of the initial segment with the old head coordinates
+    snake_segments[0].position_x = old_position_x;
+    snake_segments[0].position_y = old_position_y;
 }
 
-
-
-
-// Fonction pour afficher le serpent
-void afficher_serpent(Snake *serpent) {
-  // Effacer l'écran
-  ClearLCD();
+// Function to display the snake
+void display_snake(Snake *snake) {
+    // Clear the screen
+    ClearLCD();
   
-  // Définir la position du curseur pour la tête du serpent
-  SetCursor(serpent->position_y, serpent->position_x);
+    // Set cursor position for the snake's head
+    SetCursor(snake->position_y, snake->position_x);
 
-  // Afficher la tête du serpent
-  print("*");
+    // Display the snake's head
+    print("*");
 
-  // Définir la position du curseur pour chaque segment du serpent
-  for (int i = 0; i < serpent->longueur; i++) {
-    SetCursor(serpent->segments[i].position_y, serpent->segments[i].position_x);
+    // Set cursor position for each segment of the snake
+    for (int i = 0; i < snake->length; i++) {
+        SetCursor(snake->segments[i].position_y, snake->segments[i].position_x);
     
-    // Afficher le segment du serpent
-    print("o");
-  }
-}
-void init_ports()
-{
-    ANSELD=0;
-    TRISD=1;
-}
-
-
-
-void snake_move(Snake *serpent)
-{
-    unsigned char rigth=PORTDbits.RD4;
-    unsigned char left=PORTDbits.RD1;
-    unsigned char up=PORTDbits.RD2;
-    unsigned char down=PORTDbits.RD3;
-    if(rigth==1)
-    {
-        serpent->direction=DROITE;
-    }
-    if(down==1)
-    {
-        serpent->direction=BAS;
-    }
-    if(left==1)
-    {
-        serpent->direction=GAUCHE;
-    }
-    if(up==1)
-    {
-        serpent->direction=HAUT;
+        // Display the snake segment
+        print("o");
     }
 }
 
-int detecter_collision(Snake *serpent) {
-    // Vérifier les collisions avec les bords de l'écran
-    if (serpent->position_x < 0 || serpent->position_x >= 20 || serpent->position_y < 0 || serpent->position_y >= 4) {
-        
-        return 1; // Collision avec les bords de l'écran
+// Function to initialize ports
+void init_ports() {
+    ANSELD = 0;
+    TRISD = 1;
+}
+
+// Function to move the snake based on user input
+void snake_move(Snake *snake) {
+    unsigned char right = PORTDbits.RD4;
+    unsigned char left = PORTDbits.RD1;
+    unsigned char up = PORTDbits.RD2;
+    unsigned char down = PORTDbits.RD3;
+    if (right == 1) {
+        snake->direction = RIGHT;
+    }
+    if (down == 1) {
+        snake->direction = DOWN;
+    }
+    if (left == 1) {
+        snake->direction = LEFT;
+    }
+    if (up == 1) {
+        snake->direction = UP;
+    }
+}
+
+// Function to detect collisions
+int detect_collision(Snake *snake) {
+    // Check collisions with screen borders
+    if (snake->position_x < 0 || snake->position_x >= 20 || snake->position_y < 0 || snake->position_y >= 4) {
+        return 1; // Collision with screen borders
     }
 
-    // Vérifier les collisions avec le corps du serpent
-    for (int i = 0; i < serpent->longueur; i++) {
-        if (serpent->position_x == serpent->segments[i].position_x && serpent->position_y == serpent->segments[i].position_y) {
-            return 1; // Collision avec le corps du serpent
+    // Check collisions with snake's body
+    for (int i = 0; i < snake->length; i++) {
+        if (snake->position_x == snake->segments[i].position_x && snake->position_y == snake->segments[i].position_y) {
+            return 1; // Collision with snake's body
         }
     }
 
-    return 0; // Pas de collision détectée
+    return 0; // No collision detected
 }
 
-
-
-
-void generer_proie() {
-  do {
-    x = pseudo_aleatoire(0,18);
-    y = pseudo_aleatoire(0, 3);
-    // Vérifier que la proie n'est pas générée sur une partie du corps du serpent
-    for (int i = 0; i < serpent.longueur; i++) {
-      if ((x == serpent.segments[i].position_x && y == serpent.segments[i].position_y)) {
-        // Si la proie est générée sur une partie du corps du serpent, réessayer avec de nouvelles coordonnées
-        x = -1; // Marquer les coordonnées comme invalides
-        y = -1;
-        break;
-      }
-    }
-  } while (x == -1||y==-1); // Continuer à générer de nouvelles coordonnées jusqu'à ce qu'elles soient valides
+// Function to generate prey
+void generate_prey() {
+    do {
+        x = pseudo_random(0, 18);
+        y = pseudo_random(0, 3);
+        // Check that the prey is not generated on any part of the snake's body
+        for (int i = 0; i < snake.length; i++) {
+            if ((x == snake.segments[i].position_x && y == snake.segments[i].position_y)) {
+                // If the prey is generated on any part of the snake's body, try again with new coordinates
+                x = -1; // Mark coordinates as invalid
+                y = -1;
+                break;
+            }
+        }
+    } while (x == -1 || y == -1); // Continue generating new coordinates until they are valid
 }
 
-void afficher_proie()
-{
-  SetCursor(y,x);
-  print("*");
+// Function to display prey
+void display_prey() {
+    SetCursor(y, x);
+    print("*");
 }
-
-
-
-
-
-
-
-
 
 void main() {
-    // Initialisation du serpent et des ports
-    
-   
-    unsigned char graine = 52; // Par exemple, vous pouvez utiliser n'importe quelle valeur ici
+    // Initialize the snake and ports
+    unsigned char seed = 52; // For example, you can use any value here
 
-    // Utiliser la valeur de graine comme graine pour srand()
-    srand((unsigned int)graine);
+    // Use the value of seed as seed for srand()
+    srand((unsigned int)seed);
     unsigned char P;
     TRISB = 0;
     TRISCbits.RC0 = 0;
@@ -295,102 +200,79 @@ void main() {
     P = 0X01;
     SendCommand(P);
     init_ports();
-    initialiser_serpent(&serpent);
+    initialize_snake(&snake);
 
-    int a = 2; // Variable de contrôle pour le jeu
+    int game_status = 2; // Game control variable
 
-    // Boucle principale du jeu
+    // Main game loop
     while (1) {
-        // Vérifier si le jeu est en cours
-        while(a==2)
-        {
-            if(PORTDbits.RD6==0)
-        
-            {
-
+        // Check if the game is ongoing
+        while (game_status == 2) {
+            if (PORTDbits.RD6 == 0) {
+                // Display game start message if START button is pressed
                 SetCursor(0, 5);
                 print("SNAKE GAME");
-                SetCursor(1,5);
+                SetCursor(1, 5);
                 print("----------");
                 SetCursor(2, 0);
                 print("Press START to play!");
                 SetCursor(3, 0);
                 print("********************");
-                
-
-            }
-            else
-            {
-                a=0;
+            } else {
+                game_status = 0;
                 break;
             }
-            
         }
         
-        
-       
-        
-        
-        if (a == 0) {
-            
-            
-
-            // Déplacer le serpent
-            snake_move(&serpent); 
-            deplacer_serpent(&serpent);
-            if (detecter_collision(&serpent)) {
-                // Afficher "GAME OVER" si une collision est détectée
-               
-               
-                a = 1; 
-                // Mettre fin au jeu
+        if (game_status == 0) {
+            // Move the snake
+            snake_move(&snake); 
+            move_snake(&snake);
+            if (detect_collision(&snake)) {
+                // Display "GAME OVER" if collision is detected
+                game_status = 1; 
+                // End the game
             }
 
-            // Gérer les collisions
-            
-            // Afficher le serpent
-            afficher_serpent(&serpent);
-            afficher_proie();
-            if(serpent.position_x==0&&serpent.position_y==0)
-            {
-                SetCursor(0,0);
+            // Handle collisions
+
+            // Display the snake
+            display_snake(&snake);
+            display_prey();
+            if (snake.position_x == 0 && snake.position_y == 0) {
+                SetCursor(0, 0);
                 print(" ");
             }
             __delay_ms(750);
-            if (serpent.position_x == x && serpent.position_y == y)
-            {
-                SetCursor(y,x);
-                print(" "); // Effacer la proie de l'écran
-      
-                // Augmenter la longueur du serpent en ajoutant un segment
-                serpent.longueur++;
+            if (snake.position_x == x && snake.position_y == y) {
+                SetCursor(y, x);
+                print(" "); // Clear prey from the screen
+
+                // Increase snake length by adding a segment
+                snake.length++;
                 score++;
 
-                // Générer une nouvelle proie
-                generer_proie();
-              }
+                // Generate a new prey
+                generate_prey();
+            }
         } else {
             ClearLCD();
-            // Le jeu est terminé, afficher "GAME OVER" en permanence
+            // The game is over, permanently display "GAME OVER"
             while (1) {
-                
                 SetCursor(1, 5);
                 print("GAME OVER");
                 SetCursor(3, 3);
-                
                 print("SCORE:");
                 
                 char s[3];
-                sprintf(s,"%d",score);
-                SetCursor(3,11);
+                sprintf(s, "%d", score);
+                SetCursor(3, 11);
                 print(s);
-                if(PORTDbits.RD6==1)
-                {
-                    a=2;
+                if (PORTDbits.RD6 == 1) {
+                    game_status = 2;
                     break;
                 }
                 
-                // Vous pouvez ajouter ici une pause avant de relancer le jeu
             }
         }
     }
