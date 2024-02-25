@@ -8,7 +8,7 @@
 void delay() {
     unsigned int i;
     for (i = 0; i < 100; i++) {
-        // Vous pouvez ajuster ce délai selon votre besoin
+       
     }
 }
 
